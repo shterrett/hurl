@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -11,7 +11,7 @@ homepage:       https://github.com/shterrett/hurl#readme
 bug-reports:    https://github.com/shterrett/hurl/issues
 author:         Stuart Terrett
 maintainer:     shterrett@gmail.com
-copyright:      2023 Stuart Terrett
+copyright:      2026 Stuart Terrett
 license:        MIT
 license-file:   LICENSE
 build-type:     Simple
@@ -26,7 +26,6 @@ source-repository head
 library
   exposed-modules:
       Hurl
-      Hurl.Parser
   other-modules:
       Paths_hurl
   hs-source-dirs:
@@ -34,10 +33,13 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       aeson
-    , antlr-haskell
     , base >=4.7 && <5
+    , diagnose
+    , megaparsec
+    , monad-validate
+    , parser-combinators
     , text
-  default-language: GHC2021
+  default-language: GHC2024
 
 executable hurl-exe
   main-is: Main.hs
@@ -48,11 +50,14 @@ executable hurl-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
-    , antlr-haskell
     , base >=4.7 && <5
+    , diagnose
     , hurl
+    , megaparsec
+    , monad-validate
+    , parser-combinators
     , text
-  default-language: GHC2021
+  default-language: GHC2024
 
 test-suite hurl-test
   type: exitcode-stdio-1.0
@@ -64,8 +69,11 @@ test-suite hurl-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
-    , antlr-haskell
     , base >=4.7 && <5
+    , diagnose
     , hurl
+    , megaparsec
+    , monad-validate
+    , parser-combinators
     , text
-  default-language: GHC2021
+  default-language: GHC2024

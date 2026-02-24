@@ -4,7 +4,7 @@ github:              "shterrett/hurl"
 license:             MIT
 author:              "Stuart Terrett"
 maintainer:          "shterrett@gmail.com"
-copyright:           "2023 Stuart Terrett"
+copyright:           "2026 Stuart Terrett"
 
 extra-source-files:
 - README.md
@@ -22,10 +22,13 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - aeson
 - base >= 4.7 && < 5
-- antlr-haskell
+- diagnose
+- megaparsec
+- monad-validate
+- parser-combinators
 - text
 
-default-language: GHC2021
+language: GHC2024
 
 ghc-options:
 - -Wall
