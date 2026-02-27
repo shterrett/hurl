@@ -25,6 +25,10 @@ method = locValue . requestMethod
 url :: Request -> Text
 url = locValue . requestUrl
 
+-- | Extract the body value
+body :: Request -> Maybe Body
+body = fmap locValue . requestBody
+
 -- | Extract the option values
 options :: Request -> [RequestOption]
 options = map locValue . requestOptions
@@ -83,10 +87,10 @@ spec = describe "Hurl.Parser" $ do
           Right req -> do
             method req `shouldBe` POST
             url req `shouldBe` "https://api.example.com/users/123"
-            case options req of
-              [JsonBody (Located _ v)] ->
+            case body req of
+              Just (JsonBody (Located _ v)) ->
                 v `shouldBe` [aesonQQ| {"email": "john.updated@example.com"} |]
-              _ -> expectationFailure "expected JsonBody option"
+              _ -> expectationFailure "expected JsonBody"
 
       it "parses POST with form body" $ do
         src <- TIO.readFile "examples/post-form.hurl"
@@ -96,10 +100,10 @@ spec = describe "Hurl.Parser" $ do
           Right req -> do
             method req `shouldBe` POST
             url req `shouldBe` "https://api.example.com/users/123"
-            case options req of
-              [FormBody kvs] ->
+            case body req of
+              Just (FormBody kvs) ->
                 map kvPair kvs `shouldBe` [("email", "john.updated@example.com")]
-              _ -> expectationFailure "expected FormBody option"
+              _ -> expectationFailure "expected FormBody"
 
       it "parses GET with insecure option" $ do
         src <- TIO.readFile "examples/insecure.hurl"
@@ -147,6 +151,10 @@ spec = describe "Hurl.Parser" $ do
 
       it "rejects trailing content after valid request" $
         parse' "GET https://google.com extra" `shouldSatisfy` isLeft
+
+      it "rejects request with both json and form body" $
+        parse' "POST https://x.com {\n  json {\n    {\"a\":1}\n  }\n  form {\n    key: \"val\"\n  }\n}"
+          `shouldSatisfy` isLeft
 
 isLeft :: Either a b -> Bool
 isLeft (Left _)  = True

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Hurl.Parser
-  ( Request(..), Method(..), RequestOption(..), KeyValue(..), Key(..)
+  ( Request(..), Method(..), RequestOption(..), KeyValue(..), Key(..), Body(..)
   , Span(..), Located(..), HurlParseError(..), Parser
   , parseRequest
   ) where
@@ -38,11 +38,15 @@ data Key = BareKey Text | QuotedKey Text
 data KeyValue = KeyValue { kvKey :: Located Key, kvValue :: Located Text }
   deriving (Show, Eq)
 
--- Request options (the contents of the outer { } block)
+-- Body variants for a request
+data Body
+  = JsonBody (Located Value)
+  | FormBody [Located KeyValue]
+  deriving (Show, Eq)
+
+-- Request options (the contents of the outer { } block, excluding body)
 data RequestOption
   = QueryParams [Located KeyValue]
-  | JsonBody    (Located Value)
-  | FormBody    [Located KeyValue]
   | Insecure
   deriving (Show, Eq)
 
@@ -50,6 +54,7 @@ data RequestOption
 data Request = Request
   { requestMethod  :: Located Method
   , requestUrl     :: Located Text
+  , requestBody    :: Maybe (Located Body)
   , requestOptions :: [Located RequestOption]
   } deriving (Show, Eq)
 
@@ -58,6 +63,7 @@ data HurlParseError
   = UnknownMethod Text
   | InvalidJson   Text
   | UnterminatedJson
+  | DuplicateBody
   deriving (Show, Eq, Ord)
 
 type Parser = Parsec HurlParseError Text
@@ -66,11 +72,13 @@ instance ShowErrorComponent HurlParseError where
   showErrorComponent (UnknownMethod m) = "unknown HTTP method: " <> Text.unpack m
   showErrorComponent (InvalidJson msg) = "invalid JSON body: " <> Text.unpack msg
   showErrorComponent UnterminatedJson  = "unterminated JSON body (unmatched '{')"
+  showErrorComponent DuplicateBody     = "a request may have at most one body (json or form)"
 
 instance HasHints HurlParseError Text where
   hints (UnknownMethod _) = []
   hints (InvalidJson _)   = [Note "the JSON body must be a valid JSON value"]
   hints UnterminatedJson  = [Note "check that every '{' has a matching '}'"]
+  hints DuplicateBody     = []
 
 -- Infrastructure
 
@@ -136,12 +144,6 @@ pQueryBlock = located $ do
   kvs <- between (symbol "{") (symbol "}") (many pKeyValue)
   pure (QueryParams kvs)
 
-pFormBlock :: Parser (Located RequestOption)
-pFormBlock = located $ do
-  _ <- symbol "form"
-  kvs <- between (symbol "{") (symbol "}") (many pKeyValue)
-  pure (FormBody kvs)
-
 -- Capture a balanced { ... } as Text, then decode with Aeson
 pBalancedBraces :: Parser Text
 pBalancedBraces = do
@@ -156,8 +158,8 @@ pBalancedBraces = do
       let d' = case c of '{' -> d + 1; '}' -> d - 1; _ -> d
       go d' (acc <> Text.singleton c)
 
-pJsonBlock :: Parser (Located RequestOption)
-pJsonBlock = located $ do
+pJsonBody :: Parser (Located Body)
+pJsonBody = located $ do
   _ <- symbol "json"
   _ <- symbol "{"                          -- outer option-block brace
   raw <- lexeme pBalancedBraces            -- inner { ... } JSON literal + trailing ws
@@ -168,27 +170,44 @@ pJsonBlock = located $ do
     Left err -> customFailure (InvalidJson (Text.pack err))
     Right v  -> pure (JsonBody (Located (Span start end) v))
 
+pFormBody :: Parser (Located Body)
+pFormBody = located $ do
+  _ <- symbol "form"
+  kvs <- between (symbol "{") (symbol "}") (many pKeyValue)
+  pure (FormBody kvs)
+
 pInsecure :: Parser (Located RequestOption)
 pInsecure = located (symbol "insecure" $> Insecure)
 
-pOption :: Parser (Located RequestOption)
-pOption =
-      try pQueryBlock
-  <|> try pJsonBlock
-  <|> try pFormBlock
-  <|> pInsecure
+data BlockItem
+  = BodyItem   (Located Body)
+  | OptionItem (Located RequestOption)
+
+pBlockItem :: Parser BlockItem
+pBlockItem =
+      (BodyItem   <$> try pJsonBody)
+  <|> (BodyItem   <$> try pFormBody)
+  <|> (OptionItem <$> try pQueryBlock)
+  <|> (OptionItem <$> pInsecure)
   <?> "request option (query, json, form, or insecure)"
 
-pOptionBlock :: Parser [Located RequestOption]
-pOptionBlock = between (symbol "{") (symbol "}") (many pOption)
+pOptionBlock :: Parser (Maybe (Located Body), [Located RequestOption])
+pOptionBlock = between (symbol "{") (symbol "}") $ do
+  items <- many pBlockItem
+  let bodies = [b | BodyItem  b <- items]
+      opts   = [o | OptionItem o <- items]
+  case bodies of
+    []  -> pure (Nothing, opts)
+    [b] -> pure (Just b,  opts)
+    _   -> customFailure DuplicateBody
 
 -- Top-level entry point
 parseRequest :: Parser Request
 parseRequest = do
   sc
-  m    <- pMethod
-  u    <- pUrl
-  opts <- fromMaybe [] <$> optional pOptionBlock
+  m <- pMethod
+  u <- pUrl
+  (mbody, opts) <- fromMaybe (Nothing, []) <$> optional pOptionBlock
   sc
   eof
-  pure (Request m u opts)
+  pure (Request m u mbody opts)
