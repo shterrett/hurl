@@ -1,4 +1,3 @@
-module Hurl where
+module Hurl (module Hurl.Parser) where
 
-foo :: IO ()
-foo = pure ()
+import Hurl.Parser

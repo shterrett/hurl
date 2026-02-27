@@ -62,5 +62,12 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    other-modules:
+    - Hurl.ParserSpec
     dependencies:
     - hurl
+    - hspec >= 2.7
+    - hedgehog
+    - hspec-hedgehog
+    - aeson-qq
+    - containers
