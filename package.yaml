@@ -22,11 +22,18 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - aeson
 - base >= 4.7 && < 5
+- bytestring
+- case-insensitive
+- crypton-connection
 - diagnose
+- http-client >= 0.7
+- http-client-tls >= 0.3
+- http-types >= 0.12
 - megaparsec
 - monad-validate
 - parser-combinators
 - text
+- tls
 
 language: GHC2024
 
@@ -64,6 +71,7 @@ tests:
     - -with-rtsopts=-N
     other-modules:
     - Hurl.ParserSpec
+    - Hurl.HttpSpec
     dependencies:
     - hurl
     - hspec >= 2.7
@@ -71,3 +79,5 @@ tests:
     - hspec-hedgehog
     - aeson-qq
     - containers
+    - wai
+    - warp

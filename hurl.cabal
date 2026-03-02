@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Hurl
+      Hurl.Http
       Hurl.Parser
   other-modules:
       Paths_hurl
@@ -35,11 +36,18 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
+    , case-insensitive
+    , crypton-connection
     , diagnose
+    , http-client >=0.7
+    , http-client-tls >=0.3
+    , http-types >=0.12
     , megaparsec
     , monad-validate
     , parser-combinators
     , text
+    , tls
   default-language: GHC2024
 
 executable hurl-exe
@@ -52,12 +60,19 @@ executable hurl-exe
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
+    , case-insensitive
+    , crypton-connection
     , diagnose
+    , http-client >=0.7
+    , http-client-tls >=0.3
+    , http-types >=0.12
     , hurl
     , megaparsec
     , monad-validate
     , parser-combinators
     , text
+    , tls
   default-language: GHC2024
 
 test-suite hurl-test
@@ -65,6 +80,7 @@ test-suite hurl-test
   main-is: Spec.hs
   other-modules:
       Hurl.ParserSpec
+      Hurl.HttpSpec
   hs-source-dirs:
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
@@ -72,14 +88,23 @@ test-suite hurl-test
       aeson
     , aeson-qq
     , base >=4.7 && <5
+    , bytestring
+    , case-insensitive
     , containers
+    , crypton-connection
     , diagnose
     , hedgehog
     , hspec >=2.7
     , hspec-hedgehog
+    , http-client >=0.7
+    , http-client-tls >=0.3
+    , http-types >=0.12
     , hurl
     , megaparsec
     , monad-validate
     , parser-combinators
     , text
+    , tls
+    , wai
+    , warp
   default-language: GHC2024
