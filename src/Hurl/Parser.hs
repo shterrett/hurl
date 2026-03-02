@@ -3,6 +3,7 @@
 module Hurl.Parser
   ( Request(..), Method(..), RequestOption(..), KeyValue(..), Key(..), Body(..)
   , Span(..), Located(..), HurlParseError(..), Parser
+  , keyText
   , parseRequest
   ) where
 
@@ -44,18 +45,18 @@ data Body
   | FormBody [Located KeyValue]
   deriving (Show, Eq)
 
--- Request options (the contents of the outer { } block, excluding body)
+-- Request options (the contents of the outer { } block, excluding body and query params)
 data RequestOption
-  = QueryParams [Located KeyValue]
-  | Insecure
+  = Insecure
   deriving (Show, Eq)
 
 -- Top-level AST node
 data Request = Request
-  { requestMethod  :: Located Method
-  , requestUrl     :: Located Text
-  , requestBody    :: Maybe (Located Body)
-  , requestOptions :: [Located RequestOption]
+  { requestMethod      :: Located Method
+  , requestUrl         :: Located Text        -- base URL only, no "?..." part
+  , requestBody        :: Maybe (Located Body)
+  , requestQueryParams :: [Located KeyValue]  -- merged (URL params ++ block params, block wins)
+  , requestOptions     :: [Located RequestOption]
   } deriving (Show, Eq)
 
 -- Custom parse error
@@ -115,9 +116,6 @@ pMethod = located $ lexeme $ do
     "OPTIONS" -> pure OPTIONS
     other     -> customFailure (UnknownMethod other)
 
-pUrl :: Parser (Located Text)
-pUrl = located $ lexeme $ takeWhile1P (Just "URL") (not . isSpace)
-
 pStringLiteral :: Parser Text
 pStringLiteral = do
   _ <- char '"'
@@ -136,13 +134,37 @@ pKeyValue = located $ do
   v <- located (lexeme pStringLiteral)
   pure (KeyValue k v)
 
+-- | Extract the text of a Key
+keyText :: Key -> Text
+keyText (BareKey t)   = t
+keyText (QuotedKey t) = t
+
+-- URL parsers
+
+-- Parses a single key=value pair from a URL query string (no quotes, no colon)
+pQueryStringParam :: Parser (Located KeyValue)
+pQueryStringParam = located $ do
+  k <- located $ BareKey <$> takeWhile1P (Just "query param key")
+                                (\c -> c /= '=' && c /= '&' && not (isSpace c))
+  _ <- char '='
+  v <- located $ takeWhileP (Just "query param value")
+                              (\c -> c /= '&' && not (isSpace c))
+  pure (KeyValue k v)
+
+-- Replaces pUrl; returns (base URL text, query-string params)
+pUrlAndParams :: Parser (Located Text, [Located KeyValue])
+pUrlAndParams = do
+  base   <- located $ takeWhile1P (Just "URL") (\c -> not (isSpace c) && c /= '?')
+  params <- option [] (char '?' *> sepBy pQueryStringParam (char '&'))
+  sc
+  pure (base, params)
+
 -- Option parsers
 
-pQueryBlock :: Parser (Located RequestOption)
-pQueryBlock = located $ do
+pQueryBlock :: Parser [Located KeyValue]
+pQueryBlock = do
   _ <- symbol "query"
-  kvs <- between (symbol "{") (symbol "}") (many pKeyValue)
-  pure (QueryParams kvs)
+  between (symbol "{") (symbol "}") (many pKeyValue)
 
 -- Capture a balanced { ... } as Text, then decode with Aeson
 pBalancedBraces :: Parser Text
@@ -180,34 +202,43 @@ pInsecure :: Parser (Located RequestOption)
 pInsecure = located (symbol "insecure" $> Insecure)
 
 data BlockItem
-  = BodyItem   (Located Body)
+  = BodyItem  (Located Body)
+  | QueryItem [Located KeyValue]
   | OptionItem (Located RequestOption)
 
 pBlockItem :: Parser BlockItem
 pBlockItem =
       (BodyItem   <$> try pJsonBody)
   <|> (BodyItem   <$> try pFormBody)
-  <|> (OptionItem <$> try pQueryBlock)
+  <|> (QueryItem  <$> try pQueryBlock)
   <|> (OptionItem <$> pInsecure)
   <?> "request option (query, json, form, or insecure)"
 
-pOptionBlock :: Parser (Maybe (Located Body), [Located RequestOption])
+pOptionBlock :: Parser (Maybe (Located Body), [Located KeyValue], [Located RequestOption])
 pOptionBlock = between (symbol "{") (symbol "}") $ do
   items <- many pBlockItem
-  let bodies = [b | BodyItem  b <- items]
-      opts   = [o | OptionItem o <- items]
+  let bodies  = [b | BodyItem  b <- items]
+      queries = concat [q | QueryItem  q <- items]
+      opts    = [o | OptionItem o <- items]
   case bodies of
-    []  -> pure (Nothing, opts)
-    [b] -> pure (Just b,  opts)
+    []  -> pure (Nothing, queries, opts)
+    [b] -> pure (Just b,  queries, opts)
     _   -> customFailure DuplicateBody
+
+-- | Merge URL query params and block query params; block params take precedence.
+mergeQueryParams :: [Located KeyValue] -> [Located KeyValue] -> [Located KeyValue]
+mergeQueryParams urlParams blockParams =
+  let blockKeys = map (keyText . locValue . kvKey . locValue) blockParams
+      urlOnly   = filter (\kv -> keyText (locValue (kvKey (locValue kv))) `notElem` blockKeys) urlParams
+  in urlOnly <> blockParams
 
 -- Top-level entry point
 parseRequest :: Parser Request
 parseRequest = do
   sc
   m <- pMethod
-  u <- pUrl
-  (mbody, opts) <- fromMaybe (Nothing, []) <$> optional pOptionBlock
+  (u, urlParams) <- pUrlAndParams
+  (mbody, blockParams, opts) <- fromMaybe (Nothing, [], []) <$> optional pOptionBlock
   sc
   eof
-  pure (Request m u mbody opts)
+  pure (Request m u mbody (mergeQueryParams urlParams blockParams) opts)

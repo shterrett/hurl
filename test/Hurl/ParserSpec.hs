@@ -33,14 +33,13 @@ body = fmap locValue . requestBody
 options :: Request -> [RequestOption]
 options = map locValue . requestOptions
 
--- | Extract key text from a Key
-keyText :: Key -> Text
-keyText (BareKey t)   = t
-keyText (QuotedKey t) = t
-
 -- | Simplify a Located KeyValue to (key, value)
 kvPair :: Located KeyValue -> (Text, Text)
 kvPair (Located _ (KeyValue k v)) = (keyText (locValue k), locValue v)
+
+-- | Extract query params as (key, value) pairs
+queryParams :: Request -> [(Text, Text)]
+queryParams = map kvPair . requestQueryParams
 
 -- | Check if a ParseErrorBundle contains a specific custom error
 hasCustomError :: HurlParseError -> ParseErrorBundle Text HurlParseError -> Bool
@@ -70,14 +69,11 @@ spec = describe "Hurl.Parser" $ do
         src <- TIO.readFile "examples/query-params.hurl"
         let result = parse' src
         case result of
-          Left err -> expectationFailure (errorBundlePretty err)
+          Left err  -> expectationFailure (errorBundlePretty err)
           Right req -> do
             method req `shouldBe` GET
             url req `shouldBe` "https://www.imdb.com"
-            case options req of
-              [QueryParams kvs] ->
-                map kvPair kvs `shouldBe` [("s", "all"), ("q", "star trek")]
-              _ -> expectationFailure "expected QueryParams option"
+            queryParams req `shouldBe` [("s", "all"), ("q", "star trek")]
 
       it "parses POST with JSON body" $ do
         src <- TIO.readFile "examples/post.hurl"
@@ -114,6 +110,23 @@ spec = describe "Hurl.Parser" $ do
             method req `shouldBe` GET
             url req `shouldBe` "https://google.com"
             options req `shouldBe` [Insecure]
+
+      it "parses GET with URL query string" $ do
+        let result = parse' "GET https://example.com?foo=bar&baz=qux"
+        case result of
+          Left err  -> expectationFailure (errorBundlePretty err)
+          Right req -> do
+            method req `shouldBe` GET
+            url req `shouldBe` "https://example.com"
+            queryParams req `shouldBe` [("foo", "bar"), ("baz", "qux")]
+
+      it "merges URL query string and block params, block wins on duplicates" $ do
+        let src = "GET https://example.com?foo=original&keep=yes {\n  query {\n    foo: \"override\"\n  }\n}"
+        case parse' src of
+          Left err  -> expectationFailure (errorBundlePretty err)
+          Right req -> do
+            url req `shouldBe` "https://example.com"
+            queryParams req `shouldBe` [("keep", "yes"), ("foo", "override")]
 
     describe "failure cases" $ do
 
