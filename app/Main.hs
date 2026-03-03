@@ -10,6 +10,7 @@ import qualified Data.Text.IO as Text
 import Error.Diagnose
 import Error.Diagnose.Compat.Megaparsec
 import Hurl (HurlResponse(..), parseRequest, sendRequest)
+import Data.List (isPrefixOf, partition)
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn)
@@ -18,7 +19,9 @@ import Text.Megaparsec (runParser)
 main :: IO ()
 main = do
   args <- getArgs
-  case args of
+  let (flags, positional) = partition ("--" `isPrefixOf`) args
+      verbose              = "--verbose" `elem` flags
+  case positional of
     [filename] -> do
       content <- Text.readFile filename
       case runParser parseRequest filename content of
@@ -28,7 +31,7 @@ main = do
             Left httpErr -> do
               hPutStrLn stderr ("HTTP error: " <> show httpErr)
               exitFailure
-            Right resp -> printResponse resp
+            Right resp -> printResponse verbose resp
         Left bundle -> do
           let diag  = errorDiagnosticFromBundle
                         (Nothing :: Maybe Text)
@@ -38,13 +41,15 @@ main = do
               diag' = addFile diag filename (Text.unpack content)
           printDiagnostic stderr WithUnicode (TabSize 4) defaultStyle diag'
           exitFailure
-    _ -> putStrLn "Usage: hurl-exe <filename.hurl>" >> exitFailure
+    _ -> putStrLn "Usage: hurl-exe [--verbose] <filename.hurl>" >> exitFailure
 
-printResponse :: HurlResponse -> IO ()
-printResponse resp = do
-  putStrLn ("HTTP " <> show (hurlResponseStatus resp))
-  mapM_ printHeader (hurlResponseHeaders resp)
-  putStrLn ""
-  LBS.putStr (hurlResponseBody resp)
+printResponse :: Bool -> HurlResponse -> IO ()
+printResponse verbose resp
+  | verbose   = do
+      putStrLn ("HTTP " <> show (hurlResponseStatus resp))
+      mapM_ printHeader (hurlResponseHeaders resp)
+      putStrLn ""
+      LBS.putStr (hurlResponseBody resp)
+  | otherwise = LBS.putStr (hurlResponseBody resp)
   where
     printHeader (name, value) = BSC.putStrLn (name <> ": " <> value)
