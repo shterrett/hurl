@@ -183,10 +183,8 @@ pBalancedBraces = do
 pJsonBody :: Parser (Located Body)
 pJsonBody = located $ do
   _ <- symbol "json"
-  _ <- symbol "{"                          -- outer option-block brace
-  raw <- lexeme pBalancedBraces            -- inner { ... } JSON literal + trailing ws
-  _ <- symbol "}"                          -- close outer option-block brace
   start <- getSourcePos
+  raw   <- lexeme pBalancedBraces          -- { ... } is the JSON object itself
   end   <- getSourcePos
   case Aeson.eitherDecodeStrict (Text.encodeUtf8 raw) of
     Left err -> customFailure (InvalidJson (Text.pack err))

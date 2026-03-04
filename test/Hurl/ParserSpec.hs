@@ -150,7 +150,7 @@ spec = describe "Hurl.Parser" $ do
         parse' "GET" `shouldSatisfy` isLeft
 
       it "rejects invalid JSON body" $ do
-        let input = "POST https://x.com {\n  json {\n    { invalid json }\n  }\n}"
+        let input = "POST https://x.com {\n  json {\n    invalid json\n  }\n}"
         parse' input `shouldSatisfy` isLeft
 
       it "rejects unclosed outer option block" $
@@ -166,7 +166,7 @@ spec = describe "Hurl.Parser" $ do
         parse' "GET https://google.com extra" `shouldSatisfy` isLeft
 
       it "rejects request with both json and form body" $
-        parse' "POST https://x.com {\n  json {\n    {\"a\":1}\n  }\n  form {\n    key: \"val\"\n  }\n}"
+        parse' "POST https://x.com {\n  json {\n    \"a\":1\n  }\n  form {\n    key: \"val\"\n  }\n}"
           `shouldSatisfy` isLeft
 
 isLeft :: Either a b -> Bool
