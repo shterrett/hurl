@@ -39,12 +39,10 @@ module.exports = grammar({
       '}',
     ),
 
-    // Outer braces = option block; inner braces = the JSON value itself
+    // The { } braces are the JSON object itself
     json_body: $ => seq(
       'json',
-      '{',
       $.json_value,
-      '}',
     ),
 
     // Recursive balanced-brace content — captures nested objects/arrays

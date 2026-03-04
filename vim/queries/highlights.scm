@@ -22,8 +22,6 @@
 (option_block "}" @punctuation.bracket)
 
 ; JSON body braces
-(json_body   "{" @punctuation.bracket)
-(json_body   "}" @punctuation.bracket)
 (json_value  "{" @punctuation.bracket)
 (json_value  "}" @punctuation.bracket)
 

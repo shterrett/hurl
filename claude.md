@@ -25,3 +25,7 @@ Related: "Parse, don't validate". Ensure data is parsed into a type that encodes
 Be liberal with newtypes for differentiating data types. 
 
 Derive Show. Use `prettyprinter` for printing human-friendly representations.
+
+## Treesitter grammar
+
+Whenever updating the parser, make sure to update the grammar in vim/ as well.
